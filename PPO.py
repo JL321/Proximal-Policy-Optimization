@@ -46,7 +46,8 @@ class PPO:
         self.trainValue = tf.train.AdamOptimizer(1e-3).minimize(self.valueObjective, var_list = valueParam)
         self.saver = tf.train.Saver()
         self.sess.run(tf.global_variables_initializer())
-        
+        print("Initialized Model")
+
     def predictPolicy(self, obs):
         return self.sess.run(self.policyOut, feed_dict = {self.x: obs})
     
