@@ -5,10 +5,10 @@ import tensorflow_probability as tfp
 def ffNetwork(x, action_dim, name = None):
     
     with tf.variable_scope(name):
-        layerSizes = [128, 256, 512, 512]
+        layerSizes = [64]
         z = x
         for layer in layerSizes:
-            z = tf.contrib.layers.fully_connected(z, layer, activation_fn = tf.nn.relu)
+            z = tf.contrib.layers.fully_connected(z, layer, activation_fn = tf.nn.tanh)
         z = tf.contrib.layers.fully_connected(z, action_dim, activation_fn = None)
     return z
 
@@ -60,8 +60,8 @@ class PPO:
         for i, (obs, reward) in enumerate(zip(states[:-1], rewards[:-1])):
             delta = reward + discount*self._predictValue(states[i+1]) - self._predictValue(obs)
             totalAdv += np.power(discount*lmbda, i)*delta
-        finalDelta = rewards[-1] - self._predictValue(states[-1])
-        totalAdv += finalDelta
+        #finalDelta = rewards[-1] - self._predictValue(states[-1])
+        #totalAdv += finalDelta
         return totalAdv
     
     def trainingStep(self, rewards, obs, gamma = 0.99):
