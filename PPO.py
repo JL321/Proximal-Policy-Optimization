@@ -34,10 +34,11 @@ class PPO:
         self.valueOut = ffNetwork(self.x, 1, name = 'ValueNetwork')
         
         self.advEstimate = (1+tf.sign(self.adv)*eps)*self.adv
+        bottomClip = (1-eps)*self.adv
+        topClip = (1+eps)*self.adv
         policyRatio = self.policyOut/self.policyOld
-        clipped_objective = tf.reduce_mean(tf.minimum(policyRatio*self.adv, self.advEstimate))       
+        clipped_objective = tf.reduce_mean(tf.clip(policyRatio*self.adv, bottomClip, topClip))       
 
-        #Note: Rewards here are rewards to go!!! Not episode rewards - need to change
         self.valueObjective = tf.reduce_mean(tf.square(self.valueOut - self.epsRewards))
         
         policyParam = [v for v in tf.trainable_variables() if 'CurrentPolicyNetwork' in v.name]
