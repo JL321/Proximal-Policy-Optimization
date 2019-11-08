@@ -5,9 +5,11 @@ import numpy as np
 import tensorflow as tf
 
 tf.reset_default_graph()
-env = gym.make('MountainCarContinuous-v0')
+env = gym.make('Pendulum-v0')
 obs_space = env.observation_space.shape[0]
 action_space = env.action_space.shape[0]
+
+print("Observation Space: {}".format(obs_space))
 
 def trainingLoop(model, episodes = 1000):
     
@@ -25,7 +27,7 @@ def trainingLoop(model, episodes = 1000):
         while not done and t < 200:
             action = model.predictPolicy(obs)
             new_obs, reward, done, _ = env.step(action)
-            new_obs = np.reshape(new_obs, (-1, 2))
+            new_obs = np.reshape(new_obs, (-1, obs_space))
             state_trajectory.append(obs)
             reward_trajectory.append(reward)
             obs = new_obs
@@ -40,10 +42,11 @@ def trainingLoop(model, episodes = 1000):
         model.trainingStep(reward_trajectory, state_trajectory)
         reward_history.append(epsReward)
         done = False
-       
+    
         if i > 0:
             model.updateOldPolicy(policyParam) 
         if (i+1) % 50 == 0:
+            print("Last Action: {}".format(action))
             print("Average of last 50 episodes: {}".format(np.mean(np.array(reward_history[-50:]))))
             print("Episode Reward on Episode {}: {}".format(i, epsReward))
             print("Global Time Step: {}".format(global_t)) 
@@ -52,10 +55,10 @@ def trainingLoop(model, episodes = 1000):
 if __name__ == '__main__':
     
     if len(np.array(obs_space).shape) != 0:
-        obs_space = (None, *obs_space)
+        state_space = (None, *obs_space)
     else:
-        obs_space = (None, obs_space)
+        state_space = (None, obs_space)
 
-    model = PPO(obs_space, action_space)
+    model = PPO(state_space, action_space)
     
     trainingLoop(model)
