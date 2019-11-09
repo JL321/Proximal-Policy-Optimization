@@ -33,7 +33,6 @@ class PPO:
 
         self.valueOut = ffNetwork(self.x, 1, name = 'ValueNetwork')
         
-        self.advEstimate = (1+tf.sign(self.adv)*eps)*self.adv
         bottomClip = (1-eps)*self.adv
         topClip = (1+eps)*self.adv
         policyRatio = self.policyOut/self.policyOld
@@ -55,17 +54,16 @@ class PPO:
     def _predictValue(self, obs):
         return self.sess.run(self.valueOut, feed_dict = {self.x: obs})
     
-    def computeAdvantage(self, rewards, states, discount = 0.99, lmbda = 0.9):
+    def computeAdvantage(self, rewards, states, discount = 0.99, lmbda = 0.95):
        
         #State shape - t_step x batch x dim
         advList = np.zeros(states.shape[0]+1)
         for i in reversed(range(states.shape[0])):
             delta = rewards[i] + discount*self._predictValue(states[i]) - self._predictValue(states[i-1])
             advList[i] = delta + discount*lmbda*advList[i+1]
-        print(len(advList))
         return advList[:-1]
     
-    def trainingStep(self, rewards, obs, gamma = 0.99, mini_batch = 32, epochs = 4):
+    def trainingStep(self, rewards, obs, gamma = 0.99, mini_batch = 16, epochs = 4):
         
         obs = np.array(obs)
         rewards = np.array(rewards)
@@ -83,18 +81,27 @@ class PPO:
         
         obs = np.squeeze(obs)
         #Adv is a one dimensional list
-
+        
+        rdIdx = np.arange(obs.shape[0])
         for _ in range(epochs):
-            rdIdx = np.random.permutation(obs.shape[-0])[:mini_batch]
+            cIdx = 0
+            endIdx = mini_batch
             currentPolicy = self.getParam() #Current Policy prior to eval
-            
-            #values per objective would need to be computed separately, and averaged outside of the main training graph (b, t_step, dim) doesn't work
-            self.sess.run(self.trainPolicy, feed_dict = {self.x: obs[rdIdx], self.adv: adv[rdIdx]})
-            self.sess.run(self.trainValue, feed_dict = {self.x: obs[rdIdx], self.epsRewards: rewards[rdIdx]})
-        
+            while endIdx < obs.shape[0]:
+                batchIdx = rdIdx[cIdx: endIdx]
+                #values per objective would need to be computed separately, and averaged outside of the main training graph (b, t_step, dim) doesn't work
+                self.sess.run(self.trainPolicy, feed_dict = {self.x: obs[batchIdx], self.adv: adv[batchIdx]})
+                self.sess.run(self.trainValue, feed_dict = {self.x: obs[batchIdx], self.epsRewards: rewards[batchIdx]})
+                cIdx += mini_batch
+                endIdx += mini_batch
+                self.updateOldPolicy(currentPolicy)
+                
+            batchIdx= rdIdx[cIdx:]
+            self.sess.run(self.trainPolicy, feed_dict = {self.x: obs[batchIdx], self.adv: adv[batchIdx]})
+            self.sess.run(self.trainValue, feed_dict = {self.x: obs[batchIdx], self.epsRewards: rewards[batchIdx]})
             self.updateOldPolicy(currentPolicy)
+            np.random.shuffle(rdIdx)
             
-        
     def getParam(self):
         cParam = [v for v in tf.trainable_variables() if 'CurrentPolicyNetwork' in v.name]
         cParam = sorted(cParam, key = lambda v: v.name)
