@@ -57,27 +57,43 @@ class PPO:
     
     def computeAdvantage(self, rewards, states, discount = 0.99, lmbda = 0.9):
        
-        advList = np.zeros(states.shape+1)
-        for i in reversed(range(len(states.shape[-1]))):
+        #State shape - t_step x batch x dim
+        advList = np.zeros(states.shape[0]+1)
+        for i in reversed(range(states.shape[0])):
             delta = rewards[i] + discount*self._predictValue(states[i]) - self._predictValue(states[i-1])
-            if i == len(states.shape[-1]-1):
-                advList[i] = delta + discount*lmbda*advList[i+1]
-        return advList[-1:]
+            advList[i] = delta + discount*lmbda*advList[i+1]
+        print(len(advList))
+        return advList[:-1]
     
-    def trainingStep(self, rewards, obs, gamma = 0.99):
-        adv = self.computeAdvantage(rewards, obs)
+    def trainingStep(self, rewards, obs, gamma = 0.99, mini_batch = 32, epochs = 4):
         
-        trajReturn = 0
+        obs = np.array(obs)
+        rewards = np.array(rewards)
+        
+        #Takes in an input of an episode trajectory
+        adv = self.computeAdvantage(rewards, obs)
+        returnSet = np.zeros(obs.shape[0]+1)
+        #Returns a GAE estimate at every observation step
+        
         for i, r in enumerate(reversed(rewards)):
-            trajReturn += (gamma**i)*r
-            rewards[-i] = trajReturn
+            returnSet[i] = r + gamma*returnSet[i+1]
+        returnSet = returnSet[:-1]  #Remove the first reward
+        
         #Substituting returns for rewards
         
         obs = np.squeeze(obs)
-        #Currently leveraging the benefit of not using batch sizes - under an environment with batch sizes,
-        #values per objective would need to be computed separately, and averaged outside of the main training graph (b, t_step, dim) doesn't work
-        self.sess.run(self.trainPolicy, feed_dict = {self.x: obs, self.adv: adv})
-        self.sess.run(self.trainValue, feed_dict = {self.x: obs, self.epsRewards: rewards})
+        #Adv is a one dimensional list
+
+        for _ in range(epochs):
+            rdIdx = np.random.permutation(obs.shape[-0])[:mini_batch]
+            currentPolicy = self.getParam() #Current Policy prior to eval
+            
+            #values per objective would need to be computed separately, and averaged outside of the main training graph (b, t_step, dim) doesn't work
+            self.sess.run(self.trainPolicy, feed_dict = {self.x: obs[rdIdx], self.adv: adv[rdIdx]})
+            self.sess.run(self.trainValue, feed_dict = {self.x: obs[rdIdx], self.epsRewards: rewards[rdIdx]})
+        
+            self.updateOldPolicy(currentPolicy)
+            
         
     def getParam(self):
         cParam = [v for v in tf.trainable_variables() if 'CurrentPolicyNetwork' in v.name]

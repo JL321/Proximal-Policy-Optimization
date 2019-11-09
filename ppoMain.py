@@ -28,7 +28,7 @@ def trainingLoop(model, episodes = 1000):
             action = model.predictPolicy(obs)
             new_obs, reward, done, _ = env.step(action)
             new_obs = np.reshape(new_obs, (-1, obs_space))
-            state_trajectory.append(obs)
+            state_trajectory.append(obs) #We forego np.squeeze for batch size 1 operations
             reward_trajectory.append(reward)
             obs = new_obs
             epsReward += reward
@@ -36,15 +36,11 @@ def trainingLoop(model, episodes = 1000):
             global_t += 1
             #sample = model.return_sample(obs)  
             #print(sample)
-        if done:
-            reward_trajectory.append(100)
-        policyParam = model.getParam()
+
         model.trainingStep(reward_trajectory, state_trajectory)
         reward_history.append(epsReward)
         done = False
     
-        if i > 0:
-            model.updateOldPolicy(policyParam) 
         if (i+1) % 50 == 0:
             print("Last Action: {}".format(action))
             print("Average of last 50 episodes: {}".format(np.mean(np.array(reward_history[-50:]))))
