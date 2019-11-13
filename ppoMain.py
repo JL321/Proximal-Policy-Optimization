@@ -12,7 +12,7 @@ action_space = env.action_space.shape[0]
 
 print("Observation Space: {}".format(obs_space))
 
-def trainingLoop(model, episodes = 1000):
+def trainingLoop(model, episodes = 1000, reward_scale = 1):
      
     done = False
     reward_history = []
@@ -27,12 +27,13 @@ def trainingLoop(model, episodes = 1000):
         obs = np.expand_dims(obs, axis = 0)
         t = 0
         
-        while not done and t < 1000:
+        while not done:
             
             action, log_prob = model.predictPolicy(obs)
             #print("A: {} LP: {} STD: {}".format(action, log_prob, std))
             
             new_obs, reward, done, _ = env.step(action)
+            reward = reward_scale*reward
             new_obs = np.reshape(new_obs, (-1, obs_space))
             state_trajectory.append(obs) #We forego np.squeeze for batch size 1 operations
             reward_trajectory.append(reward)
