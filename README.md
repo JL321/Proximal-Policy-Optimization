@@ -9,7 +9,7 @@ Implementation of PPO from (https://arxiv.org/abs/1707.06347). Without any chang
 - Matplotlib
 - Scipy
 
-**Usecase**:
+**Usecase:**
 Example call:
 ```
 python ppoMain.py --env Humanoid-v2 --episodes 1000 --localsteps 2000 --batchSize 64
