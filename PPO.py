@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import tensorflow_probability as tfp
+import scipy.signal
 
 def ffNetwork(x, action_dim, name = None):
     
@@ -82,7 +83,7 @@ class PPO:
     def predictPolicy(self, obs):
         return self.sess.run([self.policyOut, self.policy_log_prob, self.valueOut], feed_dict = {self.x: obs})
     
-    def _predictValue(self, obs):
+    def predictValue(self, obs):
         return self.sess.run(self.valueOut, feed_dict = {self.x: obs})
    
     def compute_entropy(self, probs):
@@ -92,42 +93,39 @@ class PPO:
         #Returns the negative log pdf for a diagonal multivariate gaussian
         return (int(x.get_shape()[-1])/2)*tf.log(2*np.pi) + tf.reduce_sum(tf.log(std), axis = -1) + (0.5)*tf.reduce_sum(tf.square((x-mean)/std), axis = -1) #Axis = -1 to sum across normal dim
 
-    def computeAdvantage(self, rewards, states, done, discount = 0.99, lmbda = 0.95, useGAE = True):
+    def computeAR(self, rewards, states, values, discount = 0.99, lmbda = 0.95, useGAE = True):
        
+        #Computes advantage and return
         #State shape - t_step x batch x dim
-        advList = np.zeros(states.shape[0])
-        GAE_term = 0
-        if done:
-            advList[-1] = rewards[-1] - self._predictValue(states[-2])
-        else:
-            advList[-1] = rewards[-1] + discount*self_predictValue(states[-1])-self._predictValue(states[-2])
-        for i in reversed(range(rewards.shape[0])):
-            delta = rewards[i] + discount*self._predictValue(states[i+1]) - self._predictValue(states[i])
-            if useGAE:
-                GAE_term = discount*lmbda*advList[i+1]
-            advList[i] = delta + GAE_term
-        return advList
-    
-    def trainingStep(self, traj, done, gamma = 0.99, mini_batch = 64, epochs = 10):
+        advList = np.zeros(rewards.shape)
+        deltas = rewards[:-1] + discount*values[1:] - values[:-1]
         
-        rewards, obs, actions, logprobs = traj
+        advList = self._discount(deltas, lmbda*discount)
+        returnList = self.discount(rewards, discount)[:-1]
+        
+        return advList,returnList
+    
+    def _discount(self, x, discount):
+        '''
+        for i in reversed(range(discountList.shape[0]-1)):
+            discountList[i] = discount*discountList[i+1]
+        return discountList
+        '''
+        return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
+        
+    def trainingStep(self, traj, gamma = 0.99, mini_batch = 64, epochs = 10):
+        
+        rewards, obs, actions, logprobs, values = traj
         obs = np.array(obs)
         rewards = np.array(rewards)
         actions = np.array(actions)
         logprobs = np.array(logprobs)
-
-        #Takes in an input of an episode trajectory
-        adv = self.computeAdvantage(rewards, obs, done)
-        adv = (adv-np.mean(adv))/(np.std(adv)+1e-8) #Normalize advantage estimate - 1e-8 to prevent dividing by 0
-        obs = obs[:-1]
-        returnSet = np.zeros(obs.shape[0]+1)
-        #Returns a GAE estimate at every observation step
-    
-        for i in reversed(range(rewards.shape[0])):
-            returnSet[i] = rewards[i] + gamma*returnSet[i+1]
-        returnSet = returnSet[:-1]  #Remove the first return - filler for loop
         
-        #Substituting returns for rewards to go
+        #Takes in an input of an episode trajectory
+        adv, returnSet = self.computeAdvantage(rewards, obs)
+        adv = (adv-np.mean(adv))/(np.std(adv)+1e-8) #Normalize advantage estimate - 1e-8 to prevent dividing by 0
+        values = values[:-1]
+        #Returns a GAE estimate at every observation step
         
         obs = np.squeeze(obs)
         #Adv is a one dimensional list
@@ -136,7 +134,7 @@ class PPO:
         for _ in range(epochs):
             cIdx = 0
             endIdx = mini_batch
-            currentPolicy = self.getParam() #Current Policy prior to eval
+            #currentPolicy = self.getParam() #Current Policy prior to eval
             while endIdx < obs.shape[0]:
                 batchIdx = rdIdx[cIdx: endIdx]
                 #self.sess.run(self.trainModel, feed_dict = {self.x: obs[batchIdx], self.adv: adv[batchIdx], self.action: actions[batchIdx], self.old_log_prob: logprobs[batchIdx],\

@@ -39,6 +39,8 @@ def trainingLoop(model, episodes = 1000, reward_scale = 1):
             state_trajectory.append(obs) #We forego np.squeeze for batch size 1 operations
             reward_trajectory.append(reward)
             action_trajectory.append(np.squeeze(action))
+            value_trajectory.append(value)
+            
             logProb.append(log_prob)
             obs = new_obs 
             epsReward += reward
@@ -46,9 +48,16 @@ def trainingLoop(model, episodes = 1000, reward_scale = 1):
             global_t += 1
             #sample = model.return_sample(obs)  
             #print(sample)
+        if done:
+            value_trajectory.append(0)
+            reward_trajectory.append(0)
+        else:
+            lastV = model.predictValue(new_obs)
+            value_trajectory.append(lastV)
+            reward_trajectory.append(lastV)
         state_trajectory.append(new_obs) #Append our final state for the value function - should be of t+1 size
-        trajectory = (reward_trajectory, state_trajectory, action_trajectory, logProb)
-        model.trainingStep(trajectory, done)
+        trajectory = (reward_trajectory, state_trajectory, action_trajectory, logProb, value_trajectory)
+        model.trainingStep(trajectory)
         reward_history.append(epsReward)
         done = False
         if (i+1) % 10 == 0:
