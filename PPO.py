@@ -122,7 +122,7 @@ class PPO:
         logprobs = np.array(logprobs)
         
         #Takes in an input of an episode trajectory
-        adv, returnSet = self.computeAdvantage(rewards, obs)
+        adv, returnSet = self.computeAR(rewards, obs)
         adv = (adv-np.mean(adv))/(np.std(adv)+1e-8) #Normalize advantage estimate - 1e-8 to prevent dividing by 0
         values = values[:-1]
         #Returns a GAE estimate at every observation step
