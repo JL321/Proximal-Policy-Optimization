@@ -17,7 +17,7 @@ def valueNetwork(x, action_dim, name = None):
         layerSizes = [100, 200]
         z = x
         for layer in layerSizes:
-            z = tf.contrib.layers.fully_connected(z, layer, activation_fn = tf.nn.relu)
+            z = tf.contrib.layers.fully_connected(z, layer, activation_fn = tf.nn.tanh)
         z = tf.contrib.layers.fully_connected(z, 1, activation_fn = None)
     return z
 
@@ -27,7 +27,7 @@ class PPO:
         
         self.sess = tf.Session()
         
-        eps = 0.1
+        eps = 0.2
         self.x = tf.placeholder(dtype = tf.float32, shape = observation_dim)
         self.action = tf.placeholder(dtype = tf.float32, shape = (None, action_dim))
         self.epsRewards = tf.placeholder(dtype = tf.float32, shape = None)        
@@ -36,15 +36,17 @@ class PPO:
         self.old_log_prob = tf.placeholder(dtype = tf.float32, shape = None)
 
         meanCurrent = ffNetwork(self.x, action_dim, name = 'CurrentPolicyNetwork')
-        
+        #meanCurrent = modelOut[:, :action_dim]
+        #logstdCurrent = modelOut[:, action_dim:] 
+        #print("Confirm shape: {}".format(meanCurrent))
+
         stdCurrent = tf.nn.softplus(tf.tile(tf.expand_dims(tf.log(tf.exp(0.35)-1), 0), [action_dim])) 
-        self.outStd = stdCurrent
+        #stdCurrent = tf.exp(logstdCurrent)
+        #self.outStd = stdCurrent
 
         print("Shapes: {}, {}".format(meanCurrent.shape, stdCurrent.shape))
         self.policyDist = tfp.distributions.MultivariateNormalDiag(meanCurrent, stdCurrent)
         self.policyEntropy = self.policyDist.entropy()
-        print("Verify: ")
-        print(self.policyDist.prob(self.action))
         self.policyOut = self.policyDist.sample()
 
         print("Policy Sample Shape: {}".format(self.policyOut.shape))
@@ -52,7 +54,7 @@ class PPO:
         
         bottomClip = (1-eps)
         topClip = (1+eps)
-        
+        min_adv = tf.where(self.adv > 0, (1+eps)*self.adv, (1-eps)*self.adv) 
         #Log prob in negative terms (log_prob = neg_log_prob)
         self.current_log_prob = self.neg_log_prob(self.action, meanCurrent, stdCurrent)
         self.policy_log_prob = self.neg_log_prob(self.policyOut, meanCurrent, stdCurrent)
@@ -71,14 +73,14 @@ class PPO:
         policyParam = [v for v in tf.trainable_variables() if 'CurrentPolicyNetwork' in v.name]
         valueParam = [v for v in tf.trainable_variables() if 'ValueNetwork' in v.name]   
         self.trainPolicy = tf.train.AdamOptimizer(1e-4).minimize(-clipped_objective, var_list = policyParam) #Take the negativie objective to perform gradient ascent
-        self.trainValue = tf.train.AdamOptimizer(1e-4).minimize(self.valueObjective, var_list = valueParam)
+        self.trainValue = tf.train.AdamOptimizer(1e-3).minimize(self.valueObjective, var_list = valueParam)
         #self.trainModel = tf.train.AdamOptimizer(1e-5).minimize(self.combinedLoss)
         self.saver = tf.train.Saver()
         self.sess.run(tf.global_variables_initializer())
         print("Initialized Model")
 
     def predictPolicy(self, obs):
-        return self.sess.run([self.policyOut, self.policy_log_prob], feed_dict = {self.x: obs})
+        return self.sess.run([self.policyOut, self.policy_log_prob, self.valueOut], feed_dict = {self.x: obs})
     
     def _predictValue(self, obs):
         return self.sess.run(self.valueOut, feed_dict = {self.x: obs})
@@ -88,23 +90,25 @@ class PPO:
 
     def neg_log_prob(self, x, mean, std):
         #Returns the negative log pdf for a diagonal multivariate gaussian
-        return (int(x.get_shape()[-1])/2)*tf.log(2*np.pi) + tf.reduce_sum(tf.log(std), axis = -1) + (1/2)*tf.reduce_sum(tf.square((x-mean)/std), axis = -1) #Axis = -1 to sum across normal dim
+        return (int(x.get_shape()[-1])/2)*tf.log(2*np.pi) + tf.reduce_sum(tf.log(std), axis = -1) + (0.5)*tf.reduce_sum(tf.square((x-mean)/std), axis = -1) #Axis = -1 to sum across normal dim
 
-    def computeAdvantage(self, rewards, states, discount = 0.99, lmbda = 0.95, useGAE = True):
+    def computeAdvantage(self, rewards, states, done, discount = 0.99, lmbda = 0.95, useGAE = True):
        
         #State shape - t_step x batch x dim
         advList = np.zeros(states.shape[0])
         GAE_term = 0
-
-        advList[-1] = rewards[-1]
-        for i in reversed(range(states.shape[0]-1)):
+        if done:
+            advList[-1] = rewards[-1] - self._predictValue(states[-2])
+        else:
+            advList[-1] = rewards[-1] + discount*self_predictValue(states[-1])-self._predictValue(states[-2])
+        for i in reversed(range(rewards.shape[0])):
             delta = rewards[i] + discount*self._predictValue(states[i+1]) - self._predictValue(states[i])
             if useGAE:
                 GAE_term = discount*lmbda*advList[i+1]
             advList[i] = delta + GAE_term
         return advList
     
-    def trainingStep(self, traj, gamma = 0.99, mini_batch = 64, epochs = 80):
+    def trainingStep(self, traj, done, gamma = 0.99, mini_batch = 64, epochs = 10):
         
         rewards, obs, actions, logprobs = traj
         obs = np.array(obs)
@@ -113,8 +117,9 @@ class PPO:
         logprobs = np.array(logprobs)
 
         #Takes in an input of an episode trajectory
-        adv = self.computeAdvantage(rewards, obs)
+        adv = self.computeAdvantage(rewards, obs, done)
         adv = (adv-np.mean(adv))/(np.std(adv)+1e-8) #Normalize advantage estimate - 1e-8 to prevent dividing by 0
+        obs = obs[:-1]
         returnSet = np.zeros(obs.shape[0]+1)
         #Returns a GAE estimate at every observation step
     

@@ -6,7 +6,7 @@ import tensorflow as tf
 import timeit
 
 tf.reset_default_graph()
-env = gym.make('HalfCheetah-v2')
+env = gym.make('Humanoid-v2')
 obs_space = env.observation_space.shape[0]
 action_space = env.action_space.shape[0]
 
@@ -22,14 +22,15 @@ def trainingLoop(model, episodes = 1000, reward_scale = 1):
         state_trajectory = []
         reward_trajectory = []
         action_trajectory = []
+        value_trajectory = []
         logProb = []
         obs = env.reset()
         obs = np.expand_dims(obs, axis = 0)
         t = 0
         
-        while not done:
+        while not done and t <= 1000:
             
-            action, log_prob = model.predictPolicy(obs)
+            action, log_prob, value = model.predictPolicy(obs)
             #print("A: {} LP: {} STD: {}".format(action, log_prob, std))
             
             new_obs, reward, done, _ = env.step(action)
@@ -45,8 +46,9 @@ def trainingLoop(model, episodes = 1000, reward_scale = 1):
             global_t += 1
             #sample = model.return_sample(obs)  
             #print(sample)
+        state_trajectory.append(new_obs) #Append our final state for the value function - should be of t+1 size
         trajectory = (reward_trajectory, state_trajectory, action_trajectory, logProb)
-        model.trainingStep(trajectory)
+        model.trainingStep(trajectory, done)
         reward_history.append(epsReward)
         done = False
         if (i+1) % 10 == 0:
