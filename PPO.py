@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import tensorflow_probability as tfp
 import scipy.signal
+import os
 
 EPS = 1e-8
 
@@ -69,11 +70,12 @@ class ExperienceBuffer():
         # the next line computes rewards-to-go, to be targets for the value function
         self.return_list[path_slice] = self._discount(rews, self.gamma)[:-1]
         
-        self.path_start_idx = self.pointer
+        self.path_start_idx = self.point
+        return self.return_list[self.path_start_idx]
 
     def get(self):
         
-        self.pointer, self.path_start_idx = 0
+        self.point, self.path_start_idx = 0, 0
         return [self.obs_list, self.action_list, self.logp_list, self.adv_list, self.logp_list]
 
 class PPO:
@@ -142,7 +144,7 @@ class PPO:
 
     def neg_log_prob(self, x, mu, log_std):
         #Returns the negative log pdf for a diagonal multivariate gaussian
-        pre_sum = -0.5 * (((x-mu)/(tf.exp(log_std)+EPS))**2 + 2*log_std + np.log(2*np.pi))
+        pre_sum = 0.5 * (((x-mu)/(tf.exp(log_std)+EPS))**2 + 2*log_std + np.log(2*np.pi))
         return tf.reduce_sum(pre_sum, axis=1)
         #return (int(x.get_shape()[-1])/2)*tf.log(2*np.pi) + tf.reduce_sum(tf.log(std), axis = -1) + (0.5)*tf.reduce_sum(tf.square((x-mean)/std), axis = -1) #Axis = -1 to sum across normal dim
 
@@ -223,5 +225,7 @@ class PPO:
     '''
 
     def save_variables(self, path = 'models'):
+        if not os.path.isdir(path):
+            os.mkdir(path)
         self.saver.save(self.sess, path)
             
