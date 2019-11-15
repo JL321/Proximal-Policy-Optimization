@@ -14,10 +14,10 @@ parser.add_argument('--localsteps', type = int, default = 1000, help = 'Number o
 parser.add_argument('--printInt', type = int, default = 10, help = 'Evaluate performance every printInt episodes and save')
 parser.add_argument('--batchSize', type = int, default = 16, help = 'Batch size to train under')
 parser.add_argument('--savePath', type = str, default = 'model', help = 'Save model on specified directory')
-parser.parse_args()
+args = parser.parse_args()
 
 tf.reset_default_graph()
-env = gym.make(parser.env)
+env = gym.make(args.env)
 obs_space = env.observation_space.shape[0]
 action_space = env.action_space.shape[0]
 
@@ -68,8 +68,6 @@ def trainingLoop(model, buf, episodes = 1000, timein_epoch = 1000, printInt = 50
         reward_history.append(epsReward)
         ret_history.append(totalRet/epCount)
         done = False
-        print("Test Save")
-        model.save_variables()
         if (i+1) % printInt == 0:
             print("Average of last {} episodes: {}".format(printInt, np.mean(np.array(reward_history[-printInt:]))))
             print("Average return of last {} episodes: {}".format(printInt, np.mean(np.array(ret_history[-printInt:]))))
@@ -88,8 +86,8 @@ if __name__ == '__main__':
     else:
         state_space = (None, obs_space)
     
-    buf = ExperienceBuffer(state_space[-1], action_space, parser.localsteps)
-    model = PPO(state_space, action_space, parser.batchSize, parser.savePath)    
+    buf = ExperienceBuffer(state_space[-1], action_space, args.localsteps)
+    model = PPO(state_space, action_space, args.batchSize, args.savePath)    
     print("Action space: {}".format(action_space))
     
-    trainingLoop(model, buf, parser.episodes, parser.localsteps, parser.printInt)
+    trainingLoop(model, buf, args.episodes, args.localsteps, args.printInt)
