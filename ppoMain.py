@@ -1,6 +1,6 @@
 import gym
 import matplotlib.pyplot as plt
-from PPO import PPO
+from PPO import PPO, ExperienceBuffer
 import numpy as np
 import tensorflow as tf
 import timeit
@@ -12,50 +12,41 @@ action_space = env.action_space.shape[0]
 
 print("Observation Space: {}".format(obs_space))
 
-def trainingLoop(model, episodes = 1000, reward_scale = 1):
-     
+def trainingLoop(model, buf, episodes = 50, timein_epoch = 1000, reward_scale = 1):
+    #Buf representing experience buffer  
+    
     done = False
     reward_history = []
     global_t = 0
     for i in range(episodes):
         epsReward = 0
-        state_trajectory = []
-        reward_trajectory = []
-        action_trajectory = []
-        value_trajectory = []
-        logProb = []
+
         obs = env.reset()
         obs = np.expand_dims(obs, axis = 0)
         t = 0
         
-        while not done and t <= 1000:
+        for t in range(timein_epoch):
             
             action, log_prob, value = model.predictPolicy(obs)
             #print("A: {} LP: {} STD: {}".format(action, log_prob, std))
             
             new_obs, reward, done, _ = env.step(action)
             reward = reward_scale*reward
-            new_obs = np.reshape(new_obs, (-1, obs_space))
-            state_trajectory.append(obs) #We forego np.squeeze for batch size 1 operations
-            reward_trajectory.append(reward)
-            action_trajectory.append(np.squeeze(action))
-            value_trajectory.append(value)
             
-            logProb.append(log_prob)
-            obs = new_obs 
+            new_obs = np.reshape(new_obs, (-1, obs_space))
+            buf.store(obs, action, reward, value, log_prob)
+            
             epsReward += reward
-            t += 1
             global_t += 1
+            
+            if done:
+                buf.finish_traj(reward)
+                obs, reward, done = env.reset(), 0, False
+
             #sample = model.return_sample(obs)  
             #print(sample)
-        if done:
-            value_trajectory.append(0)
-            reward_trajectory.append(0)
-        else:
-            lastV = model.predictValue(new_obs)
-            value_trajectory.append(lastV)
-            reward_trajectory.append(lastV)
-        trajectory = (reward_trajectory, state_trajectory, action_trajectory, logProb, value_trajectory)
+        
+        trajectory = buf.get()
         model.trainingStep(trajectory)
         reward_history.append(epsReward)
         done = False
@@ -74,7 +65,8 @@ if __name__ == '__main__':
     else:
         state_space = (None, obs_space)
     
+    buf = ExperienceBuffer(state_space[-1], action_space)
     model = PPO(state_space, action_space, 16)    
     print("Action space: {}".format(action_space))
     
-    trainingLoop(model)
+    trainingLoop(model, buf)
