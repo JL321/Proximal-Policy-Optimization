@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from PPO import PPO, ExperienceBuffer
 import numpy as np
 import tensorflow as tf
-import timeit
 import argparse
 
 parser = argparse.ArgumentParser(description = 'Specify run configurations for PPO implementation')
@@ -12,7 +11,9 @@ parser.add_argument('--env', type = str, default = 'Humanoid-v2', help = 'Specif
 parser.add_argument('--episodes', type = int, default = 50, help ='Number of episodes to run')
 parser.add_argument('--localsteps', type = int, default = 1000, help = 'Number of time steps run per episode,\
                     also the size of the experience buffer')
-parser.add_argument('--printInt', type = int, default = 10, help = 'Evaluate performance every printInt episodes')
+parser.add_argument('--printInt', type = int, default = 10, help = 'Evaluate performance every printInt episodes and save')
+parser.add_argument('--batchSize', type = int, default = 16, help = 'Batch size to train under')
+parser.add_argument('--savePath', type = str, default = 'model', help = 'Save model on specified directory')
 parser.parse_args()
 
 tf.reset_default_graph()
@@ -76,7 +77,7 @@ def trainingLoop(model, buf, episodes = 1000, timein_epoch = 1000, printInt = 50
             print("Return on Episode {}: {}".format(i, totalRet/epCount))
             print("Global Time Step: {}".format(global_t)) 
             print("Saving .. ")
-            model.save()
+            model.save_variables()
     plt.plot(reward_history)
     
 if __name__ == '__main__':
@@ -88,7 +89,7 @@ if __name__ == '__main__':
         state_space = (None, obs_space)
     
     buf = ExperienceBuffer(state_space[-1], action_space, parser.localsteps)
-    model = PPO(state_space, action_space, 16)    
+    model = PPO(state_space, action_space, parser.batchSize, parser.savePath)    
     print("Action space: {}".format(action_space))
     
     trainingLoop(model, buf, parser.episodes, parser.localsteps, parser.printInt)

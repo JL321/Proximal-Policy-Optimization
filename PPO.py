@@ -80,9 +80,10 @@ class ExperienceBuffer():
 
 class PPO:
     
-    def __init__(self, observation_dim, action_dim, batch_size):
+    def __init__(self, observation_dim, action_dim, batch_size, savePath):
         
         self.sess = tf.Session()
+        self.savePath = savePath
         
         eps = 0.2
         self.x = tf.placeholder(dtype = tf.float32, shape = observation_dim)
@@ -93,13 +94,7 @@ class PPO:
         self.old_log_prob = tf.placeholder(dtype = tf.float32, shape = None)
 
         meanCurrent = ffNetwork(self.x, action_dim, name = 'CurrentPolicyNetwork')
-        #meanCurrent = modelOut[:, :action_dim]
-        #logstdCurrent = modelOut[:, action_dim:] 
-        #print("Confirm shape: {}".format(meanCurrent))
 
-        #stdCurrent = tf.nn.softplus(tf.tile(tf.expand_dims(tf.log(tf.exp(0.35)-1), 0), [action_dim])) 
-        #stdCurrent = tf.exp(logstdCurrent)
-        #self.outStd = stdCurrent
         stdCurrent = tf.get_variable(name='log_std', initializer=-0.5*np.ones(action_dim, dtype=np.float32))
         std = tf.exp(stdCurrent)
 
@@ -185,7 +180,6 @@ class PPO:
         for _ in range(epochs):
             cIdx = 0
             endIdx = mini_batch
-            #currentPolicy = self.getParam() #Current Policy prior to eval
         
             while endIdx < obs.shape[0]:
                 batchIdx = rdIdx[cIdx: endIdx]
@@ -195,37 +189,20 @@ class PPO:
    
                 cIdx += mini_batch
                 endIdx += mini_batch
-                #print("Negative log probs: {}".format(sess.run(self.currentLogProb, feed_dict = {self.action: actions[batchIdx]})))
             
             batchIdx= rdIdx[cIdx:]
             #batchIdx = np.arange(obs.shape[0]+1)
             self.sess.run(self.trainPolicy, feed_dict = {self.x: obs[batchIdx], self.adv: adv[batchIdx], self.action: actions[batchIdx], self.old_log_prob: logprobs[batchIdx]})
             self.sess.run(self.trainValue, feed_dict = {self.x: obs[batchIdx], self.epsRewards: returnSet[batchIdx]})
-            #self.sess.run(self.trainModel, feed_dict = {self.x: obs[batchIdx], self.adv: adv[batchIdx], self.action: actions[batchIdx], self.old_log_prob: logprobs[batchIdx],\
-            #          self.epsRewards: returnSet[batchIdx]})
             #np.random.shuffle(rdIdx)
             
     def getParam(self):
         cParam = [v for v in tf.trainable_variables() if 'CurrentPolicyNetwork' in v.name]
         cParam = sorted(cParam, key = lambda v: v.name)
         return cParam
-    
-    '''
-    def updateOldPolicy(self, cParam):
-        
-        oldParam = [v for v in tf.trainable_variables() if 'OldPolicyNetwork' in v.name]
-        oldParam = sorted(oldParam, key = lambda v: v.name)
-        assignOps = []
-        
-        for cP, oP in zip(cParam, oldParam):
-            assignOp = tf.assign(oP, cP)
-            assignOps.append(assignOp)
-        
-        self.sess.run(assignOps)
-    '''
 
-    def save_variables(self, path = 'models'):
-        if not os.path.isdir(path):
-            os.mkdir(path)
-        self.saver.save(self.sess, path)
+    def save_variables(self):
+        if not os.path.isdir(self.savePath):
+            os.mkdir(self.savePath)
+        self.saver.save(self.sess, './'+self.savePath)
             
