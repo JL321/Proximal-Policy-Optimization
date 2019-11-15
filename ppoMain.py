@@ -55,13 +55,11 @@ def trainingLoop(model, episodes = 1000, reward_scale = 1):
             lastV = model.predictValue(new_obs)
             value_trajectory.append(lastV)
             reward_trajectory.append(lastV)
-        state_trajectory.append(new_obs) #Append our final state for the value function - should be of t+1 size
         trajectory = (reward_trajectory, state_trajectory, action_trajectory, logProb, value_trajectory)
         model.trainingStep(trajectory)
         reward_history.append(epsReward)
         done = False
         if (i+1) % 10 == 0:
-            print("Last Action: {}".format(action))
             print("Average of last 10 episodes: {}".format(np.mean(np.array(reward_history[-10:]))))
             print("Episode Reward on Episode {}: {}".format(i, epsReward))
             print("Global Time Step: {}".format(global_t)) 
