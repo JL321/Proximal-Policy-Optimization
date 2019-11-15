@@ -4,15 +4,25 @@ from PPO import PPO, ExperienceBuffer
 import numpy as np
 import tensorflow as tf
 import timeit
+import argparse
+
+parser = argparse.ArgumentParser(description = 'Specify run configurations for PPO implementation')
+parser.add_argument('--env', type = str, default = 'Humanoid-v2', help = 'Specify environment to run in -\
+                    must be compatible with OpenAI Gym.')
+parser.add_argument('--episodes', type = int, default = 50, help ='Number of episodes to run')
+parser.add_argument('--localsteps', type = int, default = 1000, help = 'Number of time steps run per episode,\
+                    also the size of the experience buffer')
+parser.add_argument('--printInt', type = int, default = 10, help = 'Evaluate performance every printInt episodes')
+parser.parse_args()
 
 tf.reset_default_graph()
-env = gym.make('Humanoid-v2')
+env = gym.make(parser.env)
 obs_space = env.observation_space.shape[0]
 action_space = env.action_space.shape[0]
 
 print("Observation Space: {}".format(obs_space))
 
-def trainingLoop(model, buf, episodes = 1000, timein_epoch = 1000, reward_scale = 1):
+def trainingLoop(model, buf, episodes = 1000, timein_epoch = 1000, printInt = 50, reward_scale = 1):
     #Buf representing experience buffer  
     
     done = False
@@ -59,9 +69,9 @@ def trainingLoop(model, buf, episodes = 1000, timein_epoch = 1000, reward_scale 
         done = False
         print("Test Save")
         model.save_variables()
-        if (i+1) % 100 == 0:
-            print("Average of last 50 episodes: {}".format(np.mean(np.array(reward_history[-50:]))))
-            print("Average return of last 50 episodes: {}".format(np.mean(np.array(ret_history[-50:]))))
+        if (i+1) % printInt == 0:
+            print("Average of last {} episodes: {}".format(printInt, np.mean(np.array(reward_history[-printInt:]))))
+            print("Average return of last {} episodes: {}".format(printInt, np.mean(np.array(ret_history[-printInt:]))))
             print("Episode Reward on Episode {}: {}".format(i, epsReward))
             print("Return on Episode {}: {}".format(i, totalRet/epCount))
             print("Global Time Step: {}".format(global_t)) 
@@ -77,8 +87,8 @@ if __name__ == '__main__':
     else:
         state_space = (None, obs_space)
     
-    buf = ExperienceBuffer(state_space[-1], action_space)
+    buf = ExperienceBuffer(state_space[-1], action_space, parser.localsteps)
     model = PPO(state_space, action_space, 16)    
     print("Action space: {}".format(action_space))
     
-    trainingLoop(model, buf)
+    trainingLoop(model, buf, parser.episodes, parser.localsteps, parser.printInt)
