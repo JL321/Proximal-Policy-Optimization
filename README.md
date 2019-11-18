@@ -1,5 +1,5 @@
 # Proximal-Policy-Optimization
-Implementation of PPO from (https://arxiv.org/abs/1707.06347). Without any changed parameters, the program trains an agent in the Humanoid-v2 environment from OpenAI Gym.
+Tensorflow implementation of PPO from (https://arxiv.org/abs/1707.06347). Without any changed parameters, the program trains an agent in the Humanoid-v2 environment from OpenAI Gym.
 
 **Dependencies:**
 - Mujoco-py (Mujoco150+) 
